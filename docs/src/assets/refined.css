@@ -95,6 +95,71 @@ p {
   margin: 0;
 }
 
+.rom-update-toast {
+  position: fixed;
+  z-index: 45;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  width: min(420px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  max-height: calc(100dvh - 80px - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  padding: 18px 52px 18px 18px;
+  border: 1px solid var(--gold-soft);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.rom-update-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.rom-update-message p + p {
+  margin-top: 8px;
+}
+
+.rom-update-message a {
+  color: var(--cyan);
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rom-update-message a:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.rom-update-warning {
+  color: var(--muted);
+}
+
+.rom-update-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.rom-update-close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -136,6 +201,22 @@ p {
   min-width: 0;
   align-items: center;
   gap: 13px;
+}
+
+.brand-title {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.header-version {
+  color: #bfc7ba;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
 .brand-mark {
@@ -1868,7 +1949,8 @@ dialog::backdrop {
 
 body[data-active-tab="pokedex"] .type-filter,
 body[data-active-tab="moves"] .type-filter,
-body[data-active-tab="machines"] .type-filter {
+body[data-active-tab="machines"] .type-filter,
+body[data-active-tab="items"] .type-filter {
   display: block;
 }
 
@@ -4508,6 +4590,40 @@ dialog::backdrop {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
+}
+
+.item-category-grid {
+  display: grid;
+  gap: 5px;
+}
+
+.dex-category-chip.item-category-chip {
+  height: 32px;
+  padding: 0 9px;
+  text-align: left;
+}
+
+#items .item-category-heading td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--surface-soft);
+}
+
+#items .item-category-heading td::before {
+  display: none;
+}
+
+#items .item-category-heading h2 {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+@media (max-width: 1100px) {
+  #items .item-category-heading {
+    display: block;
+    margin: 12px 0 7px;
+  }
 }
 
 .type-match-mode {

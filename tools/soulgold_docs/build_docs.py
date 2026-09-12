@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -58,7 +59,7 @@ from tools.soulgold_docs.parsers.trainers import (
     trainer_constants_for_docs_maps,
     trainer_locations_for_docs_maps,
 )
-from tools.soulgold_docs.site import build_docs_payload, prepare_output_tree, write_docs_payload
+from tools.soulgold_docs.site import build_docs_payload, prepare_output_tree, refresh_static_site, write_docs_payload
 
 
 def build() -> None:
@@ -144,4 +145,10 @@ def build() -> None:
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--static-only", action="store_true", help="Refresh website UI and existing routes without rebuilding game data")
+    args = parser.parse_args()
+    if args.static_only:
+        refresh_static_site()
+    else:
+        build()

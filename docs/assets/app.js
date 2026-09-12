@@ -42,6 +42,7 @@ const state = {
   excludedCategories: new Set(),
   oakCompletionOnly: false,
   selectedMoveCategories: new Set(),
+  selectedItemCategories: new Set(),
   dexSortKey: "dex",
   dexSortDirection: "asc",
   moveSortKey: "number",
@@ -103,6 +104,26 @@ const moveSortOptions = [
   { key: "pp", label: "PP" },
 ];
 const moveFilterTabs = new Set(["moves", "machines"]);
+const itemCategoryOptions = [
+  { key: "consumables", label: "Consumables" },
+  { key: "items", label: "Items" },
+  { key: "battle-items", label: "Battle items" },
+  { key: "megastones", label: "Mega Stones" },
+];
+const itemCategoryKeys = new Set(itemCategoryOptions.map((option) => option.key));
+const consumableItemPockets = new Set(["POCKET_MEDICINE", "POCKET_BERRIES", "POCKET_POKE_BALLS"]);
+const consumableItemSortTypes = new Set(["ITEM_TYPE_STAT_BOOST_DRINK", "ITEM_TYPE_STAT_BOOST_FEATHER"]);
+const consumableItemConstants = new Set([
+  "ITEM_ABILITY_CAPSULE", "ITEM_ABILITY_PATCH", "ITEM_BOTTLE_CAP", "ITEM_GOLD_BOTTLE_CAP", "ITEM_BECKONING_BELL",
+]);
+
+function itemCategory(item) {
+  if (item.pocket === "POCKET_MEGASTONES") return "megastones";
+  if (item.pocket === "POCKET_BATTLE_ITEMS") return "battle-items";
+  if (consumableItemPockets.has(item.pocket) || consumableItemSortTypes.has(item.sortType) || consumableItemConstants.has(item.constant)) return "consumables";
+  return "items";
+}
+
 const excludedDexSpecies = new Set([
   "SPECIES_KELDEO",
   "SPECIES_KELDEO_ORDINARY",
@@ -714,7 +735,8 @@ function viewFromLocation(tab) {
     query: (params.get("q") || "").trim().toLowerCase(),
     types: (params.get("type") || "").split(",").filter(Boolean).map((type) => `TYPE_${type.toUpperCase().replace(/^TYPE_/, "")}`),
     typeMatchMode: tab === "pokedex" && params.get("match") === "all" ? "all" : "any",
-    categories: (params.get("category") || "").split(",").filter((category) => dexCategoryKeys.has(category)),
+    categories: tab === "pokedex" ? (params.get("category") || "").split(",").filter((category) => dexCategoryKeys.has(category)) : [],
+    itemCategories: tab === "items" ? (params.get("category") || "").split(",").filter((category) => itemCategoryKeys.has(category)) : [],
     excludedCategories: (params.get("exclude") || "").split(",").filter((category) => dexCategoryKeys.has(category)),
     oakCompletionOnly: tab === "pokedex" && params.get("preset") === "oak",
     moveCategories: (params.get("damage") || "").split(",").filter((category) => moveCategoryKeys.has(category)),
@@ -745,6 +767,7 @@ function routeUrl(tab, detail = null, view = null) {
     excludedCategories: [],
     oakCompletionOnly: false,
     moveCategories: [],
+    itemCategories: [],
     sortKey: "dex",
     sortDirection: "asc",
     moveSortKey: "number",
@@ -763,6 +786,9 @@ function routeUrl(tab, detail = null, view = null) {
   }
   if (!detail && nextView.categories?.length && tab === "pokedex") {
     url.searchParams.set("category", nextView.categories.join(","));
+  }
+  if (!detail && nextView.itemCategories?.length && tab === "items") {
+    url.searchParams.set("category", nextView.itemCategories.join(","));
   }
   if (!detail && nextView.excludedCategories?.length && tab === "pokedex") {
     url.searchParams.set("exclude", nextView.excludedCategories.join(","));
@@ -882,6 +908,7 @@ function currentViewState(scrollY = window.scrollY) {
     excludedCategories: [...state.excludedCategories],
     oakCompletionOnly: state.oakCompletionOnly,
     moveCategories: [...state.selectedMoveCategories],
+    itemCategories: [...state.selectedItemCategories],
     sortKey: state.dexSortKey,
     sortDirection: state.dexSortDirection,
     moveSortKey: state.moveSortKey,
@@ -901,6 +928,9 @@ function applyViewState(view = {}) {
   state.oakCompletionOnly = Boolean(view.oakCompletionOnly);
   state.selectedMoveCategories = new Set(
     (view.moveCategories || []).filter((category) => moveCategoryKeys.has(category)),
+  );
+  state.selectedItemCategories = new Set(
+    (view.itemCategories || []).filter((category) => itemCategoryKeys.has(category)),
   );
   state.dexSortKey = normalizeDexSortKey(view.sortKey);
   state.dexSortDirection = view.sortDirection === "desc" ? "desc" : "asc";
@@ -938,6 +968,7 @@ function syncFilterHistory() {
     "",
     routeUrl(state.activeTab, null, currentViewState()),
   );
+  window.dispatchEvent(new Event("docs:routechange"));
 }
 
 async function applyLocationRoute(historyState = null) {
@@ -950,6 +981,7 @@ async function applyLocationRoute(historyState = null) {
   const previousExcludedCategories = [...state.excludedCategories].join(",");
   const previousOakCompletionOnly = state.oakCompletionOnly;
   const previousMoveCategories = [...state.selectedMoveCategories].join(",");
+  const previousItemCategories = [...state.selectedItemCategories].join(",");
   const previousSort = `${state.dexSortKey}:${state.dexSortDirection}`;
   const previousMoveSort = `${state.moveSortKey}:${state.moveSortDirection}`;
   state.activeTab = route.tab;
@@ -965,6 +997,7 @@ async function applyLocationRoute(historyState = null) {
     || previousExcludedCategories !== [...state.excludedCategories].join(",")
     || previousOakCompletionOnly !== state.oakCompletionOnly
     || previousMoveCategories !== [...state.selectedMoveCategories].join(",")
+    || previousItemCategories !== [...state.selectedItemCategories].join(",")
     || previousSort !== `${state.dexSortKey}:${state.dexSortDirection}`
     || previousMoveSort !== `${state.moveSortKey}:${state.moveSortDirection}`;
   const sectionNeedsData = (sectionDataFiles[state.activeTab] || [])
@@ -1007,6 +1040,7 @@ async function navigateDetail(kind, slug) {
     state.excludedCategories.clear();
     state.oakCompletionOnly = false;
     state.selectedMoveCategories.clear();
+    state.selectedItemCategories.clear();
     resetDexSort();
     resetMoveSort();
     syncTypeFilter();
@@ -1094,6 +1128,7 @@ function syncActiveTabUi() {
     else link.removeAttribute("aria-current");
   });
   document.querySelectorAll(".panel").forEach((panel) => panel.classList.toggle("active", panel.id === state.activeTab));
+  window.dispatchEvent(new Event("docs:routechange"));
 }
 
 function openMobileNav() {
@@ -1191,6 +1226,7 @@ async function setTab(tab, { updateHistory = true } = {}) {
   state.excludedCategories.clear();
   state.oakCompletionOnly = false;
   state.selectedMoveCategories.clear();
+  state.selectedItemCategories.clear();
   resetDexSort();
   resetMoveSort();
   syncTypeFilter();
@@ -1372,11 +1408,43 @@ function renderMoveFilter(rows) {
   syncTypeFilter();
 }
 
+function renderItemFilter() {
+  const panel = document.getElementById("typeFilterPanel");
+  if (!panel) return;
+  panel.innerHTML = `
+    <div class="type-filter-section">
+      <div class="type-filter-section-head">
+        <div class="type-filter-title">Item categories</div>
+        <button class="type-filter-clear" type="button" data-clear-item-categories>All categories</button>
+      </div>
+      <div class="item-category-grid" role="group" aria-label="Item categories">
+        ${itemCategoryOptions.map((option) => `
+          <button class="dex-category-chip item-category-chip" type="button" data-item-category="${option.key}" aria-pressed="false">
+            ${option.label}
+          </button>
+        `).join("")}
+      </div>
+      <div class="type-filter-note">Select multiple categories to combine them.</div>
+    </div>
+  `;
+  syncTypeFilter();
+}
+
 function syncTypeFilter() {
   const toggle = document.getElementById("typeFilterToggle");
   const typeCount = state.selectedTypes.size;
   const usesMoveFilters = moveFilterTabs.has(state.activeTab);
-  if (usesMoveFilters) {
+  if (state.activeTab === "items") {
+    const categories = itemCategoryOptions.filter((option) => state.selectedItemCategories.has(option.key));
+    const summary = categories.length === 1 ? categories[0].label : `${categories.length} categories`;
+    toggle.textContent = categories.length ? `Filter · ${summary}` : "Filter";
+    toggle.classList.toggle("has-filter", categories.length > 0);
+    document.querySelectorAll("[data-item-category]").forEach((button) => {
+      const active = state.selectedItemCategories.has(button.dataset.itemCategory);
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  } else if (usesMoveFilters) {
     const categoryCount = state.selectedMoveCategories.size;
     const sortOption = moveSortOptions.find((option) => option.key === state.moveSortKey) || moveSortOptions[0];
     const hasSort = state.moveSortKey !== "number" || state.moveSortDirection !== "asc";
@@ -1523,6 +1591,23 @@ function closeTypeFilterOnOutsideClick(event) {
 
 function handleTypeFilterClick(event) {
   event.stopPropagation();
+  if (state.activeTab === "items") {
+    const clear = event.target.closest("[data-clear-item-categories]");
+    const button = event.target.closest("[data-item-category]");
+    if (clear) state.selectedItemCategories.clear();
+    else if (button && itemCategoryKeys.has(button.dataset.itemCategory)) {
+      const category = button.dataset.itemCategory;
+      if (state.selectedItemCategories.has(category)) state.selectedItemCategories.delete(category);
+      else state.selectedItemCategories.add(category);
+    } else return;
+    syncFilterHistory();
+    window.scrollTo(0, 0);
+    renderItems();
+    // Rendering rebuilds the panel; retain keyboard focus on the chosen control.
+    const selector = clear ? "[data-clear-item-categories]" : `[data-item-category="${button.dataset.itemCategory}"]`;
+    document.querySelector(selector)?.focus({ preventScroll: true });
+    return;
+  }
   const clearTypes = event.target.closest("[data-clear-types]");
   const clearCategories = event.target.closest("[data-clear-categories]");
   const clearMoveCategories = event.target.closest("[data-clear-move-categories]");
@@ -2474,25 +2559,36 @@ function itemLocationLines(location) {
 }
 
 function renderItems() {
+  renderItemFilter();
   const tbody = document.getElementById("itemRows");
-  const rows = state.data.items.filter((item) => matches(`${item.name} ${item.description} ${item.location} ${(item.itemIcons || []).map((icon) => icon.name).join(" ")}`));
+  const rows = state.data.items.filter((item) =>
+    (!state.selectedItemCategories.size || state.selectedItemCategories.has(itemCategory(item)))
+    && matches(`${item.name} ${item.description} ${item.location} ${(item.itemIcons || []).map((icon) => icon.name).join(" ")}`)
+  );
   tbody.innerHTML = "";
-  rows.forEach((item) => {
-    const row = el("tr", "item-row");
-    row.innerHTML = `
-      <td data-label="Name"><span class="item-name-cell${item.itemIcons?.length ? " item-name-cell-group" : ""}">${itemIconHtml(item)}<strong>${item.name}</strong></span></td>
-      <td data-label="Description">${item.description || "No description."}</td>
-      <td data-label="Location" class="muted">${itemLocationLines(item.location)}</td>
+  itemCategoryOptions.forEach((category) => {
+    const members = rows.filter((item) => itemCategory(item) === category.key);
+    if (!members.length) return;
+    const heading = el("tr", "item-category-heading");
+    heading.innerHTML = `
+      <td colspan="3">
+        <h2>${category.label}</h2>
+      </td>
     `;
-    bindRowActivation(row, () => openItem(item), `Open details for ${item.name}`);
-    tbody.appendChild(row);
+    tbody.appendChild(heading);
+    members.forEach((item) => {
+      const row = el("tr", "item-row");
+      row.dataset.itemGroup = category.key;
+      row.innerHTML = `
+        <td data-label="Name"><span class="item-name-cell${item.itemIcons?.length ? " item-name-cell-group" : ""}">${itemIconHtml(item)}<strong>${item.name}</strong></span></td>
+        <td data-label="Description">${item.description || "No description."}</td>
+        <td data-label="Location" class="muted">${itemLocationLines(item.location)}</td>
+      `;
+      bindRowActivation(row, () => openItem(item), `Open details for ${item.name}`);
+      tbody.appendChild(row);
+    });
   });
-  if (!rows.length) {
-    const row = el("tr");
-    row.innerHTML = `<td colspan="3" class="muted">No items match this search.</td>`;
-    tbody.appendChild(row);
-  }
-  setPanelStatus("items", rows.length ? "" : "No items match this search.");
+  setPanelStatus("items", rows.length ? "" : "No items match the current search and filters.");
 }
 
 function openItem(item) {

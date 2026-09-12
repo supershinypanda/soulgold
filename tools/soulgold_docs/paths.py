@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "docs" / "src"
 OUT_DIR = REPO_ROOT / "docs"
 TYPE_GRAPHICS_DIR = REPO_ROOT / "graphics/types"
+VERSION_H = REPO_ROOT / "include/config/version.h"
 
 SPECIES_H = REPO_ROOT / "include/constants/species.h"
 POKEDEX_H = REPO_ROOT / "include/constants/pokedex.h"

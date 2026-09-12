@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from html import escape
 
+from .c_parser import strip_c_comments
 from .models import (
     AbilityUsage,
     DocsPayload,
@@ -19,7 +21,7 @@ from .models import (
     TrainerRow,
     WildEncounterRow,
 )
-from .paths import OUT_DIR, SRC_DIR
+from .paths import OUT_DIR, SRC_DIR, VERSION_H
 
 SECTION_ROUTES = ("pokedex", "moves", "encounters", "machines", "items", "trainers", "abilities", "guides")
 
@@ -58,6 +60,20 @@ def prepare_output_tree() -> OutputPaths:
         route_dir = OUT_DIR / route
         if route_dir.exists():
             shutil.rmtree(route_dir)
+    copy_static_sources()
+    write_section_routes()
+    (OUT_DIR / ".nojekyll").write_text("", encoding="utf-8")
+    (OUT_DIR / "data").mkdir(parents=True, exist_ok=True)
+    return OutputPaths(
+        sprite_dir=OUT_DIR / "sprites" / "pokemon",
+        trainer_sprite_dir=OUT_DIR / "sprites" / "trainers",
+        item_icon_dir=OUT_DIR / "sprites" / "items",
+    )
+
+
+def copy_static_sources() -> None:
+    """Refresh the ROM version and copy static files without rebuilding game data."""
+    write_version_manifest()
     for item in SRC_DIR.rglob("*"):
         relative = item.relative_to(SRC_DIR)
         # Guide Markdown is authoring source embedded into the JSON payload.
@@ -67,16 +83,44 @@ def prepare_output_tree() -> OutputPaths:
         dest = OUT_DIR / relative
         if item.is_dir():
             dest.mkdir(parents=True, exist_ok=True)
+        elif relative.as_posix() == "index.html":
+            dest.write_text(read_site_template(), encoding="utf-8")
         else:
             shutil.copy2(item, dest)
+
+
+def read_site_template() -> str:
+    """Render the header version at build time so ordinary visits need no fetch."""
+    template = (SRC_DIR / "index.html").read_text(encoding="utf-8")
+    manifest = json.loads((SRC_DIR / "version.json").read_text(encoding="utf-8"))
+    return template.replace("{{LATEST_VERSION}}", escape(manifest["latestVersion"]))
+
+
+def write_version_manifest() -> None:
+    """Generate the website's latest version from the ROM's display version."""
+    header = strip_c_comments(VERSION_H.read_text(encoding="utf-8"))
+    values = re.findall(r'^[ \t]*#[ \t]*define[ \t]+DISPLAY_VERSION[ \t]+("[^"\r\n]+")[ \t]*$', header, re.MULTILINE)
+    if len(values) != 1:
+        raise ValueError(f"{VERSION_H}: expected one quoted DISPLAY_VERSION definition")
+    manifest = {"latestVersion": json.loads(values[0])}
+    (SRC_DIR / "version.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+
+def refresh_static_site() -> None:
+    """Refresh the UI and existing routes, preserving generated data and sprites."""
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    copy_static_sources()
     write_section_routes()
-    (OUT_DIR / ".nojekyll").write_text("", encoding="utf-8")
-    (OUT_DIR / "data").mkdir(parents=True, exist_ok=True)
-    return OutputPaths(
-        sprite_dir=OUT_DIR / "sprites" / "pokemon",
-        trainer_sprite_dir=OUT_DIR / "sprites" / "trainers",
-        item_icon_dir=OUT_DIR / "sprites" / "items",
-    )
+    # The output index already contains Pokédex preloads. Start from the source
+    # template so each detail route gets only its own data dependencies.
+    index_html = read_site_template()
+    detail_html = index_html.replace('<base href="./">', '<base href="../../">', 1)
+    for route in SECTION_ROUTES:
+        for entry in (OUT_DIR / route).glob("*/index.html"):
+            preloads = list(DETAIL_PRELOADS.get(route, ()))
+            if route == "pokedex":
+                preloads.append(f"species-details/{entry.parent.name}.json")
+            entry.write_text(add_data_preloads(detail_html, tuple(preloads)), encoding="utf-8")
 
 
 def add_data_preloads(index_html: str, filenames: tuple[str, ...]) -> str:
@@ -113,7 +157,7 @@ def write_detail_routes(payload: DocsPayload) -> None:
     """Create static entry points for every shareable record URL."""
     # Read the source template so the Pokédex preloads added to docs/index.html
     # are not inherited by every detail route.
-    index_html = (SRC_DIR / "index.html").read_text(encoding="utf-8")
+    index_html = read_site_template()
     detail_html = index_html.replace('<base href="./">', '<base href="../../">', 1)
     if detail_html == index_html:
         raise ValueError('docs/src/index.html must contain <base href="./">')
